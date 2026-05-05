@@ -1,162 +1,163 @@
 # idol-tg-bot
 
-乃木坂46 / 櫻坂46 / 日向坂46 などのメッセージアプリの新着メッセージを  
-自動的に Telegram Bot 経由でチャンネル・グループに転送するツールです。
+A Telegram bot that forwards messages from Sakamichi Series (Nogizaka46, Sakurazaka46, Hinatazaka46) mobile apps to a Telegram channel/group, with optional Japanese-to-Chinese translation via Gemini.
 
-colmsg (Rust版) の API 解析結果をベースに Python で再実装しています。
+Based on the [colmsg](https://github.com/proshunsuke/colmsg) API analysis, re-implemented in Python.
 
----
-
-## アーキテクチャ
+## Architecture
 
 ```
-refresh_token (初回のみ手動取得)
+refresh_token (manual, one-time)
     │
     ▼
-POST /v2/update_token  ← TokenManager が自動管理・ローリング更新
+POST /v2/update_token  ← TokenManager handles rolling refresh
     │
-    ▼ access_token (3600秒有効)
+    ▼ access_token (valid 3600s)
     │
-    ├─ GET /v2/groups           → 購読中メンバー一覧
-    └─ GET /v2/groups/{id}/timeline → 新着メッセージ
+    ├─ GET /v2/groups            → subscribed members
+    └─ GET /v2/groups/{id}/timeline → new messages
                 │
                 ▼
-        StateManager (SQLite)  ← 送信済みID管理・カーソル管理
+        StateManager (SQLite)  ← sent IDs & cursor tracking
                 │
                 ▼
         TelegramSender
-        ├─ text   → sendMessage
-        ├─ picture → sendPhoto / sendDocument
-        ├─ video  → sendVideo
-        ├─ voice  → sendAudio
-        └─ link   → sendMessage
+        │
+        ├─ text/link → GeminiTranslator (JP → ZH) → sendMessage
+        ├─ picture   → sendPhoto / sendDocument
+        ├─ video     → sendVideo
+        └─ voice     → sendAudio
 ```
 
----
+## Features
 
-## セットアップ
+- Polls multiple idol groups and forwards new messages to Telegram
+- Automatic token refresh (access tokens expire every hour)
+- Per-member timeline cursor stored in SQLite — no duplicate messages on restart
+- **Gemini translation**: Japanese → Chinese for text and link messages, keeping original text alongside the translation
+- **Idol-aware glossary**: member names, honorifics (さん→桑), nicknames preserved in hiragana
+- **Rate limiting**: enforces minimum interval between Gemini API calls to stay within free-tier RPM limits
+- Media attachments: photos, videos, and voice messages forwarded directly
 
-### 1. refresh_token の取得
+## Setup
 
-colmsg の公式ドキュメントを参照してください:  
-https://github.com/proshunsuke/colmsg/blob/main/doc/how_to_get_refresh_token.md
+### 1. Get refresh tokens
 
-要点:
-1. アプリで外部サービス連携（Google アカウント推奨）を必ず行う
-2. mitmproxy でアプリ通信を傍受する
-3. アカウント引き継ぎ操作中に `POST /v2/signin` の Response から `refresh_token` を取得
+Follow the colmsg guide: https://github.com/proshunsuke/colmsg/blob/main/doc/how_to_get_refresh_token.md
 
-### 2. Telegram Bot の準備
+TL;DR:
+1. Link your app account to an external service (Google recommended)
+2. Use mitmproxy to intercept app traffic
+3. Extract `refresh_token` from the `POST /v2/signin` response during account transfer
 
-1. [@BotFather](https://t.me/botfather) で Bot を作成し、`TELEGRAM_BOT_TOKEN` を取得
-2. 転送先のチャンネル/グループに Bot を管理者として追加
-3. `chat_id` の取得方法:
-   - チャンネルの場合: `@username` 形式か、Bot を追加後に `https://api.telegram.org/bot<TOKEN>/getUpdates` で確認
-   - グループの場合: 同様に getUpdates で確認（マイナス始まりの数字）
+### 2. Create a Telegram bot
 
-### 3. 環境設定
+1. Create a bot via [@BotFather](https://t.me/botfather) and get the `TELEGRAM_BOT_TOKEN`
+2. Add the bot as an **admin** to your target channel/group
+3. Find the `chat_id`:
+   - Channel: use `@username` or check `https://api.telegram.org/bot<TOKEN>/getUpdates`
+   - Group: same approach (chat_id will be a negative number)
+
+### 3. Configure environment
 
 ```bash
 cp .env.example .env
-# .env を編集して各値を入力
+# edit .env with your values
 ```
 
 ```env
+# Telegram
 TELEGRAM_BOT_TOKEN=<your_telegram_bot_token>
 TELEGRAM_CHAT_ID=<your_telegram_chat_id>
-POLL_INTERVAL_SECONDS=300
+POLL_INTERVAL_SECONDS=15
 
-# 使用するアプリの refresh_token のみ設定
+# Gemini translation (optional)
+ENABLE_GEMINI_TRANSLATION=false
+GEMINI_API_KEY=<your_gemini_api_key>
+GEMINI_MODEL=gemini-3.1-flash-lite-preview
+GEMINI_TIMEOUT_SECONDS=30
+
+# Refresh tokens — fill only the groups you want to follow
 REFRESH_TOKEN_NOGIZAKA=<your_nogizaka_refresh_token>
+REFRESH_TOKEN_SAKURAZAKA=<your_sakurazaka_refresh_token>
 REFRESH_TOKEN_HINATAZAKA=<your_hinatazaka_refresh_token>
 ```
 
----
+## Running
 
-## 起動方法
+### Docker (recommended)
 
-### Python 直接実行
+```bash
+mkdir -p data
+docker compose up -d --build
+
+# View logs
+docker compose logs -f --tail 50
+```
+
+### Bare Python
 
 ```bash
 pip install -r requirements.txt
 python main.py
 ```
 
-### Docker (推奨)
-
-```bash
-mkdir -p data
-docker-compose up -d
-
-# ログ確認
-docker-compose logs -f
-```
-
----
-
-## ファイル構成
+## Files
 
 ```
 idol-tg-bot/
-├── main.py            # エントリーポイント・設定読み込み
-├── bot.py             # ポーリングループ・BotRunner
-├── api_client.py      # メッセージアプリ API クライアント
-├── token_manager.py   # refresh/access token ライフサイクル管理
-├── state_manager.py   # 送信済みID・カーソル管理 (SQLite)
-├── telegram_sender.py # Telegram Bot API ラッパー
+├── main.py              # Entry point, config loading
+├── bot.py               # Polling loop, BotRunner
+├── api_client.py        # Message app API client
+├── token_manager.py     # Refresh/access token lifecycle
+├── state_manager.py     # Sent-message IDs & cursors (SQLite)
+├── telegram_sender.py   # Telegram Bot API wrapper, translation wiring
+├── translator.py        # Gemini API client with rate limiting
+├── member_glossary.py   # Idol name mappings & translation rules
 ├── requirements.txt
 ├── .env.example
 ├── Dockerfile
 └── docker-compose.yml
 ```
 
-生成されるデータファイル:
+Generated at runtime:
 ```
-tokens/
-└── nogizaka_tokens.json   # app_key ごとの token ファイル
-state.db                   # 送信済みID・カーソル (SQLite)
-bot.log                    # ログファイル
+data/
+├── tokens/              # token JSON files per app
+├── state.db             # sent IDs & cursors (SQLite)
+└── bot.log              # log output
 ```
+
+## Translation
+
+When `ENABLE_GEMINI_TRANSLATION=true` and a valid `GEMINI_API_KEY` is set, text and link messages are translated from Japanese to Chinese. Translated text is appended below the original:
+
+```
+#菅原咲月 (乃木坂46)
+2026-05-06 21:00:00
+
+今日も一日お疲れ様でした！
+
+今天也辛苦了！
 
 ---
 
-## メッセージ表示例
-
-```
-🖼 山下美月 (乃木坂46)
-📅 2024-01-15 12:34:56
-
-[画像が送信されます]
+Gemini model: gemini-3.1-flash-lite-preview
 ```
 
-```
-💬 小坂菜緒 (日向坂46)
-📅 2024-01-15 13:00:00
+The translation uses a custom glossary (`member_glossary.py`) that handles:
+- Member name kanji/kana mappings for all Sakamichi groups
+- Honorific preservation (さん → 桑)
+- Nickname handling (あだ名 kept in original hiragana)
+- Kana surname concatenation (e.g., かたやまつお → 片山和松尾)
 
-今日もがんばります！
-```
+### Gemini quota
 
----
+The free tier has an **RPD (Requests Per Day) limit** that resets at **midnight Pacific Time** (JST 4pm summer / 5pm winter). The bot enforces a minimum 5-second interval between API calls to stay under the 15 RPM limit.
 
-## 注意事項
+## Notes
 
-- アプリの利用規約 第8条（禁止事項）に自動化アクセスの禁止が含まれています。自己責任でご利用ください
-- refresh_token は機密情報です。`.env` ファイルを Git にコミットしないよう注意してください（`.gitignore` に追加推奨）
-- access_token は3600秒（1時間）で期限切れになりますが、TokenManager が自動的に更新します
-- 動画ファイルが 50MB を超える場合は Telegram に直接送信できないため、テキスト通知のみになります
-
----
-
-## トラブルシューティング
-
-**「refresh_token が未設定です」エラー**  
-→ `.env` の `REFRESH_TOKEN_*` を確認してください
-
-**「401 Unauthorized」エラーが頻発する**  
-→ refresh_token が失効している可能性があります。再取得してください
-
-**動画が送信されない**  
-→ Telegram Bot API の上限(50MB)を超えている可能性があります。ログを確認してください
-
-**メッセージが重複して届く**  
-→ `state.db` が正しく保存されているか確認してください
+- The app's Terms of Service (Article 8) prohibit automated access. **Use at your own risk.**
+- Never commit `.env` or the `tokens/` directory — they are already in `.gitignore`.
+- Access tokens expire every 3600 seconds; `TokenManager` refreshes them automatically.
+- Videos over 50 MB cannot be sent directly via Telegram Bot API; a text notice is sent instead.
