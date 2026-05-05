@@ -37,6 +37,7 @@ class GeminiTranslator:
         self._enabled = enabled and bool(self._api_key)
         self._session = requests.Session()
         self._cache: dict[str, str] = {}
+        self._max_cache_size = 500
         self._last_request_time: float = 0.0
 
     @property
@@ -132,6 +133,8 @@ class GeminiTranslator:
                 translated = self._request_translation(payload)
                 if not translated:
                     raise TranslationError("Gemini returned an empty translation.")
+                if len(self._cache) >= self._max_cache_size:
+                    self._cache.pop(next(iter(self._cache)))
                 self._cache[cache_key] = translated
                 return translated
             except Exception as exc:

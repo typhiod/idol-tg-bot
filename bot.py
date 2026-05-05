@@ -19,6 +19,7 @@ from token_manager import TokenManager
 logger = logging.getLogger(__name__)
 
 DEFAULT_COUNT = 100
+MAX_COUNT = 1000
 
 
 class IdolMessageBot:
@@ -124,6 +125,14 @@ class IdolMessageBot:
 
             messages = timeline.messages
             if len(messages) >= count and self._all_same_updated_at(messages):
+                if count >= MAX_COUNT:
+                    logger.warning(
+                        "[%s] %s hit count cap (%d), some messages at the same timestamp may be skipped",
+                        self.app_key,
+                        member_name,
+                        MAX_COUNT,
+                    )
+                    break
                 count += DEFAULT_COUNT
                 logger.debug(
                     "[%s] %s returned identical updated_at values, retry with count=%d",

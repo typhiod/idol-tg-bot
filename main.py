@@ -6,6 +6,7 @@ main.py
 
 import logging
 import os
+import signal
 import sys
 from pathlib import Path
 
@@ -46,6 +47,10 @@ def _get_bool_env(key: str, default: bool = False) -> bool:
     if raw_value is None:
         return default
     return raw_value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _handle_shutdown(signum, frame):
+    raise KeyboardInterrupt
 
 
 def main() -> None:
@@ -111,10 +116,11 @@ def main() -> None:
         )
         sys.exit(1)
 
+    signal.signal(signal.SIGTERM, _handle_shutdown)
     try:
         runner.run()
     except KeyboardInterrupt:
-        logger.info("Bot を停止しました")
+        logger.info("Bot stopped")
         sender.send_system_notification("Bot stopped.")
         state.close()
 
