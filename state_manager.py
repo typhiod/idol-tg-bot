@@ -5,6 +5,7 @@ Persist sent message ids and per-member timeline cursors with SQLite.
 
 import logging
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,11 @@ class StateManager:
             (app_key, group_id),
         )
         row = cursor.fetchone()
-        return row["last_updated_from"] if row else "2026-03-05T15:00:00Z"
+        if row:
+            return row["last_updated_from"]
+        initial_cursor = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.set_cursor(app_key, group_id, initial_cursor)
+        return initial_cursor
 
     def set_cursor(self, app_key: str, group_id: int, updated_from: str) -> None:
         self._conn.execute(

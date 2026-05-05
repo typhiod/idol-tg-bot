@@ -260,7 +260,8 @@ class BotRunner:
         self._sender.send_system_notification(
             "Bot started\n"
             f"apps: {', '.join(bot.app_name for bot in self._bots)}\n"
-            f"poll interval: {self._poll_interval} seconds"
+            f"poll interval: {self._poll_interval} seconds\n"
+            f"{self._sender.describe_translation_mode()}"
         )
 
         logger.info("=== Bot started ===")

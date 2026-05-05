@@ -16,6 +16,7 @@ load_dotenv()
 from bot import BotRunner
 from state_manager import StateManager
 from telegram_sender import TelegramSender
+from translator import GeminiTranslator
 
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -40,13 +41,45 @@ def _require_env(key: str) -> str:
     return val
 
 
+def _get_bool_env(key: str, default: bool = False) -> bool:
+    raw_value = os.getenv(key)
+    if raw_value is None:
+        return default
+    return raw_value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def main() -> None:
     bot_token = _require_env("TELEGRAM_BOT_TOKEN")
     chat_id = _require_env("TELEGRAM_CHAT_ID")
 
     poll_interval = int(os.getenv("POLL_INTERVAL_SECONDS", "300"))
+    translation_enabled = _get_bool_env("ENABLE_GEMINI_TRANSLATION", False)
+    gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    gemini_model = (
+        os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite-preview").strip()
+        or "gemini-3.1-flash-lite-preview"
+    )
+    gemini_timeout_seconds = int(os.getenv("GEMINI_TIMEOUT_SECONDS", "30"))
 
-    sender = TelegramSender(bot_token=bot_token, chat_id=chat_id)
+    translator = None
+    if translation_enabled:
+        if gemini_api_key:
+            translator = GeminiTranslator(
+                api_key=gemini_api_key,
+                model=gemini_model,
+                timeout_seconds=gemini_timeout_seconds,
+                enabled=True,
+            )
+        else:
+            logger.warning(
+                "ENABLE_GEMINI_TRANSLATION is true but GEMINI_API_KEY is missing. Translation will stay disabled."
+            )
+
+    sender = TelegramSender(
+        bot_token=bot_token,
+        chat_id=chat_id,
+        translator=translator,
+    )
     state = StateManager()
     runner = BotRunner(
         sender=sender,
