@@ -130,7 +130,7 @@ data/
 
 ## Translation
 
-When `ENABLE_GEMINI_TRANSLATION=true` and a valid `GEMINI_API_KEY` is set, text and link messages are translated from Japanese to Chinese. Translated text is appended below the original:
+When `ENABLE_GEMINI_TRANSLATION=true` and a valid `GEMINI_API_KEY` is set, text and link messages are translated from Japanese to Chinese. The original Japanese text is preserved, with the Chinese translation appended below:
 
 ```
 #菅原咲月 (乃木坂46)
@@ -139,21 +139,13 @@ When `ENABLE_GEMINI_TRANSLATION=true` and a valid `GEMINI_API_KEY` is set, text 
 今日も一日お疲れ様でした！
 
 今天也辛苦了！
-
----
-
-Gemini model: gemini-3.1-flash-lite-preview
 ```
 
-The translation uses a custom glossary (`member_glossary.py`) that handles:
-- Member name kanji/kana mappings for all Sakamichi groups
-- Honorific preservation (さん → 桑)
-- Nickname handling (あだ名 kept in original hiragana)
-- Kana surname concatenation (e.g., かたやまつお → 片山和松尾)
+A custom glossary (`member_glossary.py`) provides member name mappings and domain-specific terminology for all supported groups.
 
 ### Gemini quota
 
-The free tier has an **RPD (Requests Per Day) limit** that resets at **midnight Pacific Time** (JST 4pm summer / 5pm winter). The bot enforces a minimum 5-second interval between API calls to stay under the 15 RPM limit.
+The free tier has an **RPD (Requests Per Day) limit** that resets at **midnight Pacific Time** (JST 4pm summer / 5pm winter). The bot enforces a minimum interval between API calls to stay within the free-tier RPM limit.
 
 ## Notes
 
