@@ -534,8 +534,10 @@ def build_translation_guidance(app_key: str, sender_member_name: str) -> str:
         _build_glossary_section(),
         "",
         "Glossary usage rules:",
-        "1. If any Japanese term matches a glossary entry, ALWAYS use the glossary translation \u2014 never translate literally.",
-        "2. Katakana loanwords that look like English words (e.g. '\u30e2\u30f3\u30b0\u30eb') are almost always idol tour/event/song names \u2014 check the glossary, not a dictionary.",
+        "1. If any Japanese term matches a glossary entry, use the glossary translation.",
+        "   EXCEPTION: song titles, tour names, and event names in the glossary are",
+        "   for RECOGNITION ONLY \u2014 keep them in their original form, do NOT translate.",
+        "2. Katakana loanwords that look like English words (e.g. '\u30e2\u30f3\u30b0\u30eb') are almost always idol tour/event/song names \u2014 keep the original katakana/English, do not translate.",
         "3. When a term is NOT in the glossary, prefer idol-context interpretation over literal translation.",
         "",
         "Kana surname concatenation rule:",
@@ -561,6 +563,15 @@ def build_translation_guidance(app_key: str, sender_member_name: str) -> str:
         "   Examples: 'でんちゃん' → 'でんちゃん', 'ひーつん' → 'ひーつん',",
         "   'つっきー' → 'つっきー', 'みくてぃー' → 'みくてぃー'.",
         "   Rationale: Chinese fans know these nicknames in hiragana and use them directly.",
+        "8. CRITICAL — Song title rule:",
+        "   When song titles (曲名) appear in the text, keep them in their ORIGINAL form.",
+        "   Do NOT translate Japanese song titles into Chinese and do NOT convert",
+        "   English song titles. Just output the original title as-is.",
+        "   Examples: '青春の馬' → '青春の馬' (NOT '青春之马'),",
+        "   '君しか勝たん' → '君しか勝たん' (NOT '只有你赢'),",
+        "   'Start over!' → 'Start over!' (NOT '重新开始').",
+        "   This applies to all songs, tours, events, and live names from the groups.",
+        "   The glossary provides recognition hints for these terms, not translations.",
     ]
 
     if sender_full_name:
