@@ -141,7 +141,7 @@ class GeminiTranslator:
                 last_error = exc
                 if attempt == 2:
                     break
-                if self._is_rate_limit_error(exc):
+                if self._is_rate_limit_error(exc) or self._is_timeout_error(exc):
                     wait_seconds = 5 * (attempt + 1)  # 5s, 10s, 20s
                 else:
                     wait_seconds = attempt + 1  # 1s, 2s
@@ -191,6 +191,20 @@ class GeminiTranslator:
         if not translated:
             raise TranslationError("Gemini candidate contained no text.")
         return translated
+
+    @staticmethod
+    def _is_timeout_error(exc: Exception) -> bool:
+        """Return True if the error looks like a connection / read timeout."""
+        msg = str(exc).lower()
+        return any(
+            keyword in msg
+            for keyword in (
+                "timeout",
+                "timed out",
+                "connection",
+                "connectionerror",
+            )
+        )
 
     @staticmethod
     def _normalize_text(text: Optional[str]) -> str:
