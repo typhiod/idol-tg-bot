@@ -74,7 +74,8 @@ POLL_INTERVAL_SECONDS=15
 # Gemini translation (optional)
 ENABLE_GEMINI_TRANSLATION=false
 GEMINI_API_KEY=<your_gemini_api_key>
-GEMINI_MODEL=gemini-3.1-flash-lite-preview
+GEMINI_MODEL=gemini-3.1-flash-lite
+GEMINI_FALLBACK_MODELS=
 GEMINI_TIMEOUT_SECONDS=30
 
 # Refresh tokens — fill only the groups you want to follow
@@ -142,6 +143,10 @@ When `ENABLE_GEMINI_TRANSLATION=true` and a valid `GEMINI_API_KEY` is set, text 
 ```
 
 A custom glossary (`member_glossary.py`) provides member name mappings and domain-specific terminology for all supported groups.
+
+### Gemini model choice
+
+The bot defaults to `gemini-3.1-flash-lite`. No fallback model is enabled by default now, because a low-quota backup can create more errors than it solves. If you want a fallback later, you can add one through `GEMINI_FALLBACK_MODELS`, but keep in mind that any fallback should have real quota headroom.
 
 ### Gemini quota
 

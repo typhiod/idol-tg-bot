@@ -13,6 +13,7 @@ from urllib.parse import unquote, urlparse
 import requests
 
 from api_client import IdolMessageClient, TimelineMessage
+from member_glossary import apply_translation_corrections
 from translator import GeminiTranslator, TranslationError
 
 logger = logging.getLogger(__name__)
@@ -295,11 +296,12 @@ class TelegramSender:
             return ""
 
         try:
-            return self._translator.translate_to_chinese(
+            translated = self._translator.translate_to_chinese(
                 text,
                 app_key=app_key,
                 sender_member_name=member_name,
             )
+            return apply_translation_corrections(translated, app_key)
         except TranslationError as exc:
             logger.warning("Translation skipped for current message: %s", exc)
             return ""

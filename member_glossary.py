@@ -459,6 +459,98 @@ APP_NICKNAME_HINTS = {
 }
 
 
+APP_MEMBER_NAME_RULES: dict[str, tuple[tuple[str, str, str], ...]] = {
+    "hinatazaka": (
+        ("加藤", "史帆", "史帆"),
+        ("佐々木", "久美", "久美"),
+        ("佐々木", "美玲", "美玲"),
+        ("高瀬", "愛奈", "愛奈"),
+        ("東村", "芽依", "芽依"),
+        ("金村", "美玖", "美玖"),
+        ("河田", "陽菜", "陽菜"),
+        ("小坂", "菜緒", "菜緒"),
+        ("富田", "鈴花", "鈴花"),
+        ("丹生", "明里", "明里"),
+        ("濱岸", "ひより", "ひより"),
+        ("松田", "好花", "好花"),
+        ("上村", "ひなの", "ひなの"),
+        ("高橋", "未来虹", "未来虹"),
+        ("森本", "茉莉", "茉莉"),
+        ("山口", "陽世", "陽世"),
+        ("石塚", "瑶季", "瑶季"),
+        ("小西", "夏菜実", "夏菜実"),
+        ("清水", "理央", "理央"),
+        ("正源司", "陽子", "陽子"),
+        ("竹内", "希来里", "希来里"),
+        ("平尾", "帆夏", "帆夏"),
+        ("平岡", "海月", "海月"),
+        ("藤嶌", "果歩", "果歩"),
+        ("宮地", "すみれ", "すみれ"),
+        ("山下", "葉留花", "葉留花"),
+        ("渡辺", "莉奈", "莉奈"),
+        ("大野", "愛実", "愛実"),
+        ("大田", "美月", "美月"),
+        ("片山", "紗希", "紗希"),
+        ("蔵盛", "妃那乃", "妃那乃"),
+        ("坂井", "新奈", "新奈"),
+        ("佐藤", "優羽", "優羽"),
+        ("下田", "衣珠季", "衣珠季"),
+        ("高井", "俐香", "俐香"),
+        ("鶴崎", "仁香", "仁香"),
+        ("松尾", "桜", "桜"),
+    ),
+}
+
+_SIMPLIFIED_NAME_CHARS = str.maketrans(
+    {
+        "愛": "爱",
+        "実": "实",
+        "紗": "纱",
+        "優": "优",
+        "陽": "阳",
+        "鈴": "铃",
+        "濱": "滨",
+        "邉": "边",
+        "櫻": "樱",
+        "桜": "樱",
+    }
+)
+
+
+def _name_variants(value: str) -> set[str]:
+    variants = {value}
+    simplified = value.translate(_SIMPLIFIED_NAME_CHARS)
+    if simplified:
+        variants.add(simplified)
+    return variants
+
+
+def _build_member_name_section(app_key: str, max_names: int = 60) -> str:
+    name_rules = APP_MEMBER_NAME_RULES.get(app_key, ())
+    if not name_rules:
+        return ""
+
+    lines = [
+        "Protected member full-name rules for this app:",
+        "If any of these full names appears, treat it as ONE protected member name",
+        "and render it as the short given name. Never split surname and given name.",
+    ]
+    for family_name, given_name, short_name in name_rules[:max_names]:
+        lines.append(f"- '{family_name}{given_name}' => '{short_name}'")
+    return "\n".join(lines)
+
+
+def apply_translation_corrections(text: str, app_key: str | None = None) -> str:
+    corrected = text
+    for family_name, given_name, short_name in APP_MEMBER_NAME_RULES.get(app_key or "", ()):
+        for family_variant in _name_variants(family_name):
+            for given_variant in _name_variants(given_name):
+                corrected = corrected.replace(f"{family_variant}{given_variant}", short_name)
+                for separator in ("和", " 和 ", " 和", "和 "):
+                    corrected = corrected.replace(f"{family_variant}{separator}{given_variant}", short_name)
+    return corrected
+
+
 def normalize_member_name(member_name: str) -> str:
     return member_name.strip().replace(" ", "").replace("\u3000", "")
 
@@ -533,6 +625,8 @@ def build_translation_guidance(app_key: str, sender_member_name: str) -> str:
         "",
         _build_glossary_section(),
         "",
+        _build_member_name_section(app_key),
+        "",
         "Glossary usage rules:",
         "1. If any Japanese term matches a glossary entry, use the glossary translation.",
         "   EXCEPTION: song titles, tour names, and event names in the glossary are",
@@ -545,6 +639,11 @@ def build_translation_guidance(app_key: str, sender_member_name: str) -> str:
         "concatenated together without spaces or separators, split them into the individual",
         "surnames with '和' (and) between them. NEVER try to read the whole string as a",
         "single person's full name. Example: 'かたやまつお' → '片山和松尾', NOT '片山次郎'.",
+        "This rule ONLY applies to kana-only surname strings with no particles.",
+        "It must NEVER be applied to kanji full names such as '片山紗希'.",
+        "Japanese particles after a name are grammar markers, not name separators.",
+        "Examples: '片山紗希が' => '紗希', NOT '片山和纱希';",
+        "'大野愛実は' => '愛実', NOT '大野和爱实'.",
         "",
         "Important member-name handling rules:",
         "1. Treat all Sakamichi member names as protected proper nouns.",

@@ -49,6 +49,13 @@ def _get_bool_env(key: str, default: bool = False) -> bool:
     return raw_value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _get_csv_env(key: str) -> list[str]:
+    raw_value = os.getenv(key, "")
+    if not raw_value.strip():
+        return []
+    return [item.strip() for item in raw_value.split(",") if item.strip()]
+
+
 def _handle_shutdown(signum, frame):
     raise KeyboardInterrupt
 
@@ -61,9 +68,10 @@ def main() -> None:
     translation_enabled = _get_bool_env("ENABLE_GEMINI_TRANSLATION", False)
     gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
     gemini_model = (
-        os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite-preview").strip()
-        or "gemini-3.1-flash-lite-preview"
+        os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip()
+        or "gemini-3.1-flash-lite"
     )
+    gemini_fallback_models = _get_csv_env("GEMINI_FALLBACK_MODELS")
     gemini_timeout_seconds = int(os.getenv("GEMINI_TIMEOUT_SECONDS", "30"))
 
     translator = None
@@ -72,6 +80,7 @@ def main() -> None:
             translator = GeminiTranslator(
                 api_key=gemini_api_key,
                 model=gemini_model,
+                fallback_models=gemini_fallback_models or None,
                 timeout_seconds=gemini_timeout_seconds,
                 enabled=True,
             )

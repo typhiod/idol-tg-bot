@@ -13,6 +13,9 @@ from member_glossary import build_translation_guidance
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite"
+DEFAULT_GEMINI_FALLBACK_MODELS: tuple[str, ...] = ()
+
 
 class TranslationError(RuntimeError):
     """
@@ -25,13 +28,24 @@ class GeminiTranslator:
         self,
         *,
         api_key: str,
-        model: str = "gemini-3.1-flash-lite-preview",
+        model: str = DEFAULT_GEMINI_MODEL,
+        fallback_models: list[str] | tuple[str, ...] | None = None,
+        retry_attempts: int = 5,
         timeout_seconds: int = 30,
         min_interval_seconds: float = 5.0,
         enabled: bool = True,
     ) -> None:
         self._api_key = api_key.strip()
-        self._model = model.strip() or "gemini-3.1-flash-lite-preview"
+        self._primary_model = model.strip() or DEFAULT_GEMINI_MODEL
+        configured_fallbacks = fallback_models if fallback_models is not None else DEFAULT_GEMINI_FALLBACK_MODELS
+        self._fallback_models = tuple(
+            fallback.strip()
+            for fallback in configured_fallbacks
+            if fallback and fallback.strip() and fallback.strip() != self._primary_model
+        )
+        self._model_candidates = (self._primary_model, *self._fallback_models)
+        self._model = self._primary_model
+        self._retry_attempts = max(1, retry_attempts)
         self._timeout_seconds = max(5, timeout_seconds)
         self._min_interval_seconds = max(0, min_interval_seconds)
         self._enabled = enabled and bool(self._api_key)
@@ -50,6 +64,8 @@ class GeminiTranslator:
 
     def describe_status(self) -> str:
         if self._enabled:
+            if self._fallback_models:
+                return f"translation: enabled ({self._model}; fallback: {', '.join(self._fallback_models)})"
             return f"translation: enabled ({self._model})"
         return "translation: disabled"
 
@@ -127,10 +143,10 @@ class GeminiTranslator:
         }
 
         last_error: Exception | None = None
-        for attempt in range(3):
+        for attempt in range(self._retry_attempts):
             try:
                 self._wait_for_rate_limit()
-                translated = self._request_translation(payload)
+                translated = self._request_translation_with_fallback(payload)
                 if not translated:
                     raise TranslationError("Gemini returned an empty translation.")
                 if len(self._cache) >= self._max_cache_size:
@@ -139,25 +155,46 @@ class GeminiTranslator:
                 return translated
             except Exception as exc:
                 last_error = exc
-                if attempt == 2:
+                if attempt == self._retry_attempts - 1:
                     break
-                if self._is_rate_limit_error(exc) or self._is_timeout_error(exc):
-                    wait_seconds = 5 * (attempt + 1)  # 5s, 10s, 20s
-                else:
-                    wait_seconds = attempt + 1  # 1s, 2s
+                wait_seconds = self._retry_wait_seconds(exc, attempt)
                 logger.warning(
-                    "Gemini translation failed, retry in %ds (%d/3): %s",
+                    "Gemini translation failed, retry in %ds (%d/%d): %s",
                     wait_seconds,
                     attempt + 1,
+                    self._retry_attempts,
                     exc,
                 )
                 time.sleep(wait_seconds)
 
         raise TranslationError(f"Gemini translation failed: {last_error}")
 
-    def _request_translation(self, payload: dict) -> str:
+    def _request_translation_with_fallback(self, payload: dict) -> str:
+        last_error: Exception | None = None
+
+        for model in self._model_candidates:
+            try:
+                translated = self._request_translation(payload, model)
+                if model != self._model:
+                    logger.info("Gemini translation model switched to fallback: %s", model)
+                    self._model = model
+                return translated
+            except TranslationError as exc:
+                last_error = exc
+                if not self._is_model_unavailable_error(exc):
+                    raise
+                logger.warning(
+                    "Gemini model %s is unavailable, trying next configured model: %s",
+                    model,
+                    exc,
+                )
+
+        raise TranslationError(f"All configured Gemini models failed: {last_error}")
+
+    def _request_translation(self, payload: dict, model: str) -> str:
+        self._last_request_time = time.monotonic()
         response = self._session.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/{self._model}:generateContent",
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
             headers={
                 "x-goog-api-key": self._api_key,
                 "Content-Type": "application/json",
@@ -191,6 +228,23 @@ class GeminiTranslator:
         if not translated:
             raise TranslationError("Gemini candidate contained no text.")
         return translated
+
+    def _retry_wait_seconds(self, exc: Exception, attempt: int) -> int:
+        if self._is_rate_limit_error(exc):
+            return min(60, 5 * (2**attempt))
+        if self._is_timeout_error(exc):
+            return min(30, 3 * (2**attempt))
+        return min(15, 2**attempt)
+
+    @staticmethod
+    def _is_model_unavailable_error(exc: Exception) -> bool:
+        msg = str(exc).lower()
+        return (
+            "404" in msg
+            or "not found" in msg
+            or "no longer available" in msg
+            or "model" in msg and "unavailable" in msg
+        )
 
     @staticmethod
     def _is_timeout_error(exc: Exception) -> bool:
