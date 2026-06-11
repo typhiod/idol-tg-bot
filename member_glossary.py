@@ -4,6 +4,8 @@ Translation guidance helpers for member-name handling.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 # ── Idol-domain glossary ──────────────────────────────────────────────
 # Maps Japanese idol-specific terms (katakana tour names, event names,
 # slang) to their correct Chinese translations.  Gemini would otherwise
@@ -615,14 +617,54 @@ def _build_glossary_section(max_terms: int = 80) -> str:
     return "\n".join(lines)
 
 
+_PROTECTED_TERMS_FILE = Path("protected_terms.txt")
+
+
+def load_protected_terms() -> list[str]:
+    """Load user-defined protected terms from protected_terms.txt.
+
+    Each non-blank, non-comment line is treated as a protected term
+    that must be kept in its original form and never translated.
+    """
+    if not _PROTECTED_TERMS_FILE.exists():
+        return []
+    try:
+        lines = _PROTECTED_TERMS_FILE.read_text(encoding="utf-8").splitlines()
+        return [line.strip() for line in lines if line.strip() and not line.startswith("#")]
+    except Exception:
+        return []
+
+
+def _build_protected_terms_section(terms: list[str]) -> str:
+    if not terms:
+        return ""
+    lines = ["User-defined protected terms (keep EXACTLY as written, do NOT translate):"]
+    for term in terms:
+        lines.append(f"- '{term}'")
+    return "\n".join(lines)
+
+
 def build_translation_guidance(app_key: str, sender_member_name: str) -> str:
     app_display = APP_DISPLAY_NAMES.get(app_key, app_key)
     sender_full_name = normalize_member_name(sender_member_name)
     sender_short_name = to_short_member_name(sender_member_name)
 
+    protected_terms = load_protected_terms()
+
     lines = [
         "You are translating a Japanese idol message into natural Simplified Chinese.",
         f"Current message app: {app_display}.",
+        "",
+        "Background knowledge:",
+        "You have extensive knowledge of the Sakamichi idol groups (乃木坂46, 櫻坂46, 日向坂46)",
+        "and their associated solo acts (e.g. 齋藤飛鳥, 白石麻衣). Actively use this knowledge",
+        "when translating: whenever you recognise a word or phrase as a song title, single name,",
+        "album, coupling track, tour name, live event, or any other Sakamichi release or event,",
+        "keep it in its ORIGINAL form — do NOT translate it into Chinese.",
+        "",
+        "ALL-CAPS rule:",
+        "Any word or short phrase written ENTIRELY IN UPPERCASE LATIN LETTERS (e.g. KAZOKU, BAN)",
+        "is almost certainly a Sakamichi single or song name. Keep it exactly as written.",
         "",
         _build_glossary_section(),
         "",
@@ -673,6 +715,11 @@ def build_translation_guidance(app_key: str, sender_member_name: str) -> str:
         "   This applies to all songs, tours, events, and live names from the groups.",
         "   The glossary provides recognition hints for these terms, not translations.",
     ]
+
+    protected_terms_section = _build_protected_terms_section(protected_terms)
+    if protected_terms_section:
+        lines.append("")
+        lines.append(protected_terms_section)
 
     if sender_full_name:
         lines.extend(
