@@ -62,6 +62,7 @@ IDOL_GLOSSARY: dict[str, str] = {
     "誰がその鐘を鳴らすのか？": "谁来敲响那钟",
     "Buddies": "Buddies",
     "BAN": "BAN",
+    "KAZOKU": "KAZOKU",
     "流れ弾": "流弹",
     "三月のパンドラ": "三月的潘多拉",
     "Start over!": "Start over!",
@@ -583,7 +584,7 @@ def _build_glossary_section(max_terms: int = 80) -> str:
         "\u30c9\u30ec\u30df\u30bd\u30e9\u30b7\u30c9", "\u30cf\u30c3\u30d4\u30fc\u30aa\u30fc\u30e9", "JOYFUL LOVE", "\u30a2\u30f3\u30d3\u30d0\u30ec\u30f3\u30c8",
         "\u30b5\u30a4\u30ec\u30f3\u30c8\u30de\u30b8\u30e7\u30ea\u30c6\u30a3\u30fc", "\u30b7\u30f3\u30af\u30ed\u30cb\u30b7\u30c6\u30a3", "\u30a4\u30f3\u30d5\u30eb\u30a8\u30f3\u30b5\u30fc",
         "\u30e2\u30ce\u30dd\u30ea\u30fc", "Monopoly", "Actually...", "BAN", "Buddies",
-        "Start over!", "One choice", "Am I ready?",
+        "Start over!", "One choice", "Am I ready?", "KAZOKU",
         # Core idol terminology
         "\u30bb\u30c8\u30ea", "\u30bb\u30c3\u30c8\u30ea\u30b9\u30c8", "\u30ea\u30cf", "\u30ea\u30cf\u30fc\u30b5\u30eb", "\u30a2\u30f3\u30b3\u30fc\u30eb",
         "\u30d5\u30a9\u30fc\u30e1\u30fc\u30b7\u30e7\u30f3", "\u30bb\u30f3\u30bf\u30fc", "\u30d5\u30ed\u30f3\u30c8", "\u9078\u629c", "\u30a2\u30f3\u30c0\u30fc",
